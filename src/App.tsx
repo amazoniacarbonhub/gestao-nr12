@@ -1,170 +1,118 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  Activity, AlertTriangle, Building2, CheckCircle2, ClipboardCheck,
-  FileText, Gauge, HardHat, LayoutDashboard, LogOut, Menu, Search, Settings,
-  ShieldCheck, Users, Wrench, X
+  Activity, AlertTriangle, Building2, CheckCircle2, ClipboardCheck, FileText,
+  Gauge, HardHat, LayoutDashboard, LogOut, Menu, Search, Settings, ShieldCheck,
+  Users, Wrench, X, Factory, ChevronRight, ArrowLeft, Download, Eye, LockKeyhole
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
+import { demoCompany, demoMachines, demoCategories, demoRisks, demoDeviceTypes, type DemoMachine } from "./demo-data";
 
-type Machine = {
-  id: string; tag: string; name: string; sector_name: string | null;
-  status: string; adequacy_stage: string;
-};
-
+type Machine = { id:string; tag:string; name:string; sector_name:string|null; status:string; adequacy_stage:string };
 const nav = [
-  { label: "Dashboard", icon: LayoutDashboard },
-  { label: "Empresas e unidades", icon: Building2 },
-  { label: "Inventário de máquinas", icon: Wrench },
-  { label: "Diagnóstico NR-12", icon: ClipboardCheck },
-  { label: "APR e HRN", icon: AlertTriangle },
-  { label: "Plano de adequação", icon: Activity },
-  { label: "Trabalhadores", icon: Users },
-  { label: "Laudos e relatórios", icon: FileText },
-  { label: "Configurações", icon: Settings }
+  {label:"Dashboard",icon:LayoutDashboard},{label:"Empresas e unidades",icon:Building2},
+  {label:"Inventário de máquinas",icon:Wrench},{label:"Diagnóstico NR-12",icon:ClipboardCheck},
+  {label:"APR e HRN",icon:AlertTriangle},{label:"Dispositivos de segurança",icon:ShieldCheck},
+  {label:"Plano de adequação",icon:Activity},{label:"Trabalhadores e treinamentos",icon:Users},
+  {label:"Laudos e relatórios",icon:FileText},{label:"Biblioteca normativa",icon:HardHat},
+  {label:"Configurações e auditoria",icon:Settings}
 ];
 
 export default function App() {
-  const [session, setSession] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [active, setActive] = useState("Dashboard");
-  const [machines, setMachines] = useState<Machine[]>([]);
-  const [query, setQuery] = useState("");
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [session,setSession]=useState<any>(null),[loading,setLoading]=useState(true);
+  const [email,setEmail]=useState(""),[password,setPassword]=useState(""),[error,setError]=useState("");
+  const [active,setActive]=useState("Dashboard"),[machines,setMachines]=useState<Machine[]>([]);
+  const [query,setQuery]=useState(""),[mobileOpen,setMobileOpen]=useState(false);
+  const [demo,setDemo]=useState(false),[selected,setSelected]=useState<DemoMachine|null>(null);
 
-  useEffect(() => {
-    if (!supabase) { setLoading(false); return; }
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
-    return () => listener.subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!session || !supabase) return;
-    supabase.from("machines")
-      .select("id,tag,name,status,adequacy_stage,sectors(name)")
-      .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (error) { setError(error.message); return; }
-        setMachines((data ?? []).map((m: any) => ({
-          ...m, sector_name: m.sectors?.name ?? "Setor não informado"
-        })));
+  useEffect(()=>{
+    if(!supabase){setLoading(false);return;}
+    supabase.auth.getSession().then(({data})=>{setSession(data.session);setLoading(false);});
+    const {data:listener}=supabase.auth.onAuthStateChange((_event,next)=>setSession(next));
+    return ()=>listener.subscription.unsubscribe();
+  },[]);
+  useEffect(()=>{
+    if(!session||!supabase||demo)return;
+    supabase.from("machines").select("id,tag,name,status,adequacy_stage,sectors(name)")
+      .order("created_at",{ascending:false}).then(({data,error})=>{
+        if(error){setError(error.message);return;}
+        setMachines((data??[]).map((m:any)=>({...m,sector_name:m.sectors?.name??"Setor não informado"})));
       });
-  }, [session]);
+  },[session,demo]);
 
-  const filteredMachines = useMemo(() => machines.filter(m =>
-    `${m.tag} ${m.name} ${m.sector_name}`.toLowerCase().includes(query.toLowerCase())
-  ), [machines, query]);
+  const filteredMachines=useMemo(()=>demo
+    ? demoMachines.filter(m=>`${m.tag} ${m.name} ${m.sector} ${m.type}`.toLowerCase().includes(query.toLowerCase()))
+    : machines.filter(m=>`${m.tag} ${m.name} ${m.sector_name}`.toLowerCase().includes(query.toLowerCase())),
+    [demo,machines,query]);
 
-  async function signIn(e: FormEvent) {
-    e.preventDefault(); setError("");
-    if (!supabase) return;
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setError(error.message);
-  }
+  async function signIn(e:FormEvent){e.preventDefault();setError("");if(!supabase)return;const {error}=await supabase.auth.signInWithPassword({email,password});if(error)setError(error.message);}
+  async function signOut(){if(!demo)await supabase?.auth.signOut();setSession(null);setDemo(false);setSelected(null);setActive("Dashboard");}
+  function enterDemo(){setDemo(true);setSession({user:{email:"visitante.demo@conectaseg.local"}});setActive("Dashboard");setError("");}
 
-  async function signOut() {
-    await supabase?.auth.signOut();
-    setSession(null);
-  }
+  if(!isSupabaseConfigured)return <SetupScreen/>;
+  if(loading)return <div className="loading">Carregando CONECTASEG-NR12 CONTROL...</div>;
+  if(!session)return <main className="login-wrap"><section className="login-card login-wide"><Brand/><h1>Acesse sua plataforma</h1><p className="muted">Entre com seu usuário autorizado ou explore o ambiente demonstrativo.</p>
+    <form onSubmit={signIn} className="form"><label>E-mail<input type="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Senha<input type="password" required value={password} onChange={e=>setPassword(e.target.value)}/></label>{error&&<div className="error">{error}</div>}<button className="primary full">Entrar no ambiente corporativo</button></form>
+    <div className="demo-divider"><span>OU</span></div><button className="demo-entry" onClick={enterDemo}><Factory size={20}/><span><b>Acessar demonstração</b><small>100 máquinas fictícias • módulos e análises para teste</small></span><ChevronRight/></button>
+    <small>O ambiente demo é independente e não grava dados no banco corporativo.</small></section></main>;
 
-  if (!isSupabaseConfigured) return <SetupScreen />;
-  if (loading) return <div className="loading">Carregando CONECTASEG-NR12 CONTROL...</div>;
-  if (!session) return (
-    <main className="login-wrap">
-      <section className="login-card">
-        <Brand />
-        <h1>Acesse sua plataforma</h1>
-        <p className="muted">Entre com seu usuário autorizado.</p>
-        <form onSubmit={signIn} className="form">
-          <label>E-mail<input type="email" required value={email} onChange={e => setEmail(e.target.value)} /></label>
-          <label>Senha<input type="password" required value={password} onChange={e => setPassword(e.target.value)} /></label>
-          {error && <div className="error">{error}</div>}
-          <button className="primary full">Entrar</button>
-        </form>
-        <small>O cadastro de usuários é administrado pelo responsável da organização.</small>
-      </section>
-    </main>
-  );
-
-  return (
-    <div className="app-shell">
-      <aside className={`sidebar ${mobileOpen ? "open" : ""}`}>
-        <div className="brand-row"><Brand compact /><button className="icon-btn mobile-close" onClick={() => setMobileOpen(false)}><X /></button></div>
-        <div className="nav-label">GESTÃO NR-12</div>
-        {nav.map(item => {
-          const Icon = item.icon;
-          return <button key={item.label} className={`nav-item ${active === item.label ? "selected" : ""}`}
-            onClick={() => { setActive(item.label); setMobileOpen(false); }}>
-            <Icon size={18}/><span>{item.label}</span>
-          </button>;
-        })}
-        <div className="sidebar-bottom"><ShieldCheck size={17}/> Ambiente corporativo protegido</div>
-      </aside>
-      {mobileOpen && <div className="scrim" onClick={() => setMobileOpen(false)} />}
-      <main className="main-area">
-        <header className="topbar">
-          <button className="icon-btn mobile-menu" onClick={() => setMobileOpen(true)}><Menu /></button>
-          <div><span className="eyebrow">CONECTASEG / NR12 CONTROL</span><h2>{active}</h2></div>
-          <div className="user-area"><span>{session.user.email}</span><button className="icon-btn" title="Sair" onClick={signOut}><LogOut size={18}/></button></div>
-        </header>
-        {active === "Dashboard" ? <Dashboard machines={machines} /> :
-          active === "Inventário de máquinas" ? <MachineList machines={filteredMachines} query={query} setQuery={setQuery} /> :
-          <ModulePlaceholder title={active} />}
-      </main>
-    </div>
-  );
+  const isDemo=demo;
+  return <div className="app-shell">
+    <aside className={`sidebar ${mobileOpen?"open":""}`}><div className="brand-row"><Brand compact/><button className="icon-btn mobile-close" onClick={()=>setMobileOpen(false)}><X/></button></div>
+      {isDemo&&<div className="demo-side-label">AMBIENTE DEMONSTRATIVO</div>}<div className="nav-label">GESTÃO NR-12</div>
+      {nav.map(item=>{const Icon=item.icon;return <button key={item.label} className={`nav-item ${active===item.label?"selected":""}`} onClick={()=>{setActive(item.label);setMobileOpen(false);setSelected(null);}}><Icon size={18}/><span>{item.label}</span></button>;})}
+      <div className="sidebar-bottom"><ShieldCheck size={17}/> {isDemo?"Dados fictícios — sem gravação":"Ambiente corporativo protegido"}</div>
+    </aside>
+    {mobileOpen&&<div className="scrim" onClick={()=>setMobileOpen(false)}/>}
+    <main className="main-area"><header className="topbar"><button className="icon-btn mobile-menu" onClick={()=>setMobileOpen(true)}><Menu/></button><div><span className="eyebrow">CONECTASEG / NR12 CONTROL</span><h2>{selected?selected.tag:active}</h2></div><div className="user-area">{isDemo&&<span className="demo-chip">DEMO</span>}<span>{session.user.email}</span><button className="icon-btn" title="Sair" onClick={signOut}><LogOut size={18}/></button></div></header>
+      {isDemo&&<div className="demo-banner"><AlertTriangle size={16}/><span><b>AMBIENTE DE DEMONSTRAÇÃO:</b> empresa, máquinas, fotos, riscos, indicadores e análises são fictícios. Nenhum dado será gravado.</span><button onClick={signOut}>Sair da demo</button></div>}
+      {selected?<MachineDetail machine={selected} onBack={()=>setSelected(null)}/>:
+       active==="Dashboard"?<Dashboard demo={isDemo} machines={isDemo?demoMachines:machines} onOpenInventory={()=>setActive("Inventário de máquinas")}/>:
+       active==="Inventário de máquinas"?<Inventory demo={isDemo} machines={filteredMachines} query={query} setQuery={setQuery} onSelect={m=>setSelected(m as DemoMachine)}/>:
+       active==="Empresas e unidades"?<CompanyPage demo={isDemo}/>:
+       active==="APR e HRN"?<RiskPage demo={isDemo}/>:
+       active==="Dispositivos de segurança"?<DevicesPage demo={isDemo}/>:
+       active==="Diagnóstico NR-12"?<DiagnosticPage demo={isDemo}/>:
+       active==="Plano de adequação"?<ActionPage demo={isDemo}/>:
+       active==="Trabalhadores e treinamentos"?<WorkersPage demo={isDemo}/>:
+       active==="Laudos e relatórios"?<ReportsPage demo={isDemo}/>:
+       active==="Biblioteca normativa"?<StandardsPage demo={isDemo}/>:
+       <ModulePlaceholder title={active} demo={isDemo}/>}
+    </main></div>;
 }
 
-function Brand({ compact = false }: { compact?: boolean }) {
-  return <div className="brand"><div className="brand-mark"><ShieldCheck size={compact ? 22 : 28}/></div><div><strong>CONECTASEG</strong><b>NR12 CONTROL</b>{!compact && <small>Gestão integrada de máquinas</small>}</div></div>;
+function Brand({compact=false}:{compact?:boolean}){return <div className="brand"><div className="brand-mark"><ShieldCheck size={compact?22:28}/></div><div><strong>CONECTASEG</strong><b>NR12 CONTROL</b>{!compact&&<small>Gestão integrada de máquinas</small>}</div></div>;}
+function SetupScreen(){return <main className="login-wrap"><section className="login-card"><Brand/><h1>Configuração pendente</h1><p>Adicione as variáveis <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_ANON_KEY</code> no ambiente local e nas configurações do Netlify.</p><p className="muted">Não coloque a chave service_role no navegador.</p></section></main>;}
+function PageHead({eyebrow,title,desc,action}:{eyebrow:string;title:string;desc:string;action?:React.ReactNode}){return <div className="page-head"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{desc}</p></div>{action}</div>;}
+function Dashboard({demo,machines,onOpenInventory}:{demo:boolean;machines:any[];onOpenInventory:()=>void}){
+ const count=machines.length,high=demo?machines.filter((m:DemoMachine)=>m.risk==="Crítico").length:0,work=demo?machines.filter((m:DemoMachine)=>m.status==="Em adequação").length:0;
+ const cards=[["Equipamentos cadastrados",count,Wrench,"blue"],["Em adequação",demo?work:"—",Activity,"orange"],["Riscos críticos identificados",demo?high:"—",AlertTriangle,"red"],["Setores mapeados",demo?10:"—",Building2,"green"]];
+ return <div className="content"><PageHead eyebrow="VISÃO CORPORATIVA" title="Gestão integrada de segurança de máquinas" desc={demo?`Dados de demonstração • ${demoCompany.name}`:"Centralize inventário, diagnóstico, adequação e acompanhamento operacional."} action={<button className="primary" onClick={onOpenInventory}>Ver inventário <ChevronRight size={16}/></button>}/>
+ {demo&&<div className="company-strip"><Building2/><div><b>{demoCompany.name}</b><span>{demoCompany.unit} • CNPJ {demoCompany.cnpj}</span></div><span className="fiction-tag">EMPRESA FICTÍCIA</span></div>}
+ <div className="stats-grid">{cards.map(([label,value,Icon,tone]:any)=><article className="stat-card" key={label}><div className={`stat-icon ${tone}`}><Icon/></div><div><strong>{value}</strong><span>{label}</span></div></article>)}</div>
+ <div className="dashboard-grid"><section className="panel panel-span"><div className="panel-head"><div><h3>Distribuição do parque de máquinas</h3><p>Famílias de equipamentos cadastrados</p></div><span className="tag">{count} ativos na base</span></div>{demo?<div className="category-bars">{demoCategories.map(c=><div className="category-row" key={c.name}><div><b>{c.name}</b><span>{c.examples}</span></div><div className="bar-track"><i style={{width:`${c.count}%`}}/></div><strong>{c.count}</strong></div>)}</div>:<Empty text="Os indicadores serão exibidos quando houver registros no inventário."/>}</section>
+ <section className="panel"><div className="panel-head"><div><h3>Mapa de riscos</h3><p>Classificação preliminar demo</p></div><AlertTriangle color="#d97724"/></div>{demo?<div className="risk-summary"><div><strong>{high}</strong><span>riscos críticos</span></div><div><strong>{machines.filter((m:DemoMachine)=>m.risk==="Alto").length}</strong><span>riscos altos</span></div><div><strong>{machines.filter((m:DemoMachine)=>m.risk==="Moderado").length}</strong><span>moderados</span></div></div>:<Empty text="Sem dados de risco registrados."/>}</section>
+ <section className="panel"><div className="panel-head"><div><h3>Equipamentos em destaque</h3><p>Exemplos do inventário</p></div><Wrench/></div>{demo?<div className="mini-machine-list">{demoMachines.slice(0,4).map(m=><div key={m.id}><img src={m.image} alt={m.type}/><span><b>{m.tag} — {m.name}</b><small>{m.sector} • HRN demo {m.hrn}</small></span><RiskPill value={m.risk}/></div>)}</div>:<Empty text="Nenhuma máquina cadastrada."/>}</section></div>
+ <div className="note"><CheckCircle2 size={18}/>{demo?"Todos os dados são fictícios e servem apenas para testar telas, filtros e navegação. HRN, PLr e categorias são exemplos didáticos, não avaliações técnicas.":"Fundação conectada ao Supabase. Indicadores sem dados são exibidos como não disponíveis."}</div></div>;
 }
-
-function SetupScreen() {
-  return <main className="login-wrap"><section className="login-card"><Brand/><h1>Configuração pendente</h1>
-    <p>Adicione as variáveis <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_ANON_KEY</code> no ambiente local e nas configurações do Netlify.</p>
-    <p className="muted">Não coloque a chave service_role no navegador.</p></section></main>;
+function Inventory({demo,machines,query,setQuery,onSelect}:{demo:boolean;machines:any[];query:string;setQuery:(v:string)=>void;onSelect:(m:any)=>void}){
+ return <div className="content"><PageHead eyebrow="CADASTRO BASE" title="Inventário de máquinas" desc={demo?"100 equipamentos fictícios distribuídos em 10 setores. Selecione uma máquina para abrir a ficha demonstrativa.":"Consulta dos equipamentos vinculados à sua organização."}/>
+ <section className="panel"><div className="inventory-toolbar"><div className="search-box"><Search size={18}/><input placeholder="Buscar TAG, equipamento, setor ou tipo..." value={query} onChange={e=>setQuery(e.target.value)}/></div><span className="tag">{machines.length} registros</span></div>
+ {demo?<div className="machine-grid">{machines.map((m:DemoMachine)=><button className="machine-card" key={m.id} onClick={()=>onSelect(m)}><img src={m.image} alt={m.type}/><div className="machine-card-body"><div className="machine-card-top"><b>{m.tag}</b><RiskPill value={m.risk}/></div><h3>{m.name}</h3><p>{m.type} • {m.sector}</p><div className="machine-meta"><span>{m.manufacturer}</span><span>HRN {m.hrn}</span></div><div className="machine-open">Abrir ficha <ChevronRight size={15}/></div></div></button>)}</div>
+ :machines.length?<div className="table-scroll"><table><thead><tr><th>TAG</th><th>Equipamento</th><th>Setor</th><th>Status</th><th>Etapa</th></tr></thead><tbody>{machines.map((m:any)=><tr key={m.id}><td><b>{m.tag}</b></td><td>{m.name}</td><td>{m.sector_name}</td><td>{m.status}</td><td>{m.adequacy_stage}</td></tr>)}</tbody></table></div>:<Empty text="Nenhuma máquina encontrada ou cadastrada."/>}</section></div>;
 }
-
-function Dashboard({ machines }: { machines: Machine[] }) {
-  const stats = [
-    { label: "Máquinas cadastradas", value: machines.length, icon: Wrench, tone: "blue" },
-    { label: "Em adequação", value: machines.filter(m => m.adequacy_stage === "adequacao").length, icon: Activity, tone: "orange" },
-    { label: "Com alertas críticos", value: "—", icon: AlertTriangle, tone: "red" },
-    { label: "Diagnósticos registrados", value: "—", icon: ClipboardCheck, tone: "green" }
-  ];
-  return <div className="content">
-    <div className="welcome"><div><span className="eyebrow">VISÃO CORPORATIVA</span><h1>Gestão integrada de segurança de máquinas</h1><p>Centralize inventário, diagnóstico, adequação e acompanhamento operacional.</p></div><div className="status-pill"><span/> Interface conectada ao Supabase</div></div>
-    <div className="stats-grid">{stats.map(s => { const Icon=s.icon; return <article className="stat-card" key={s.label}><div className={`stat-icon ${s.tone}`}><Icon/></div><div><strong>{s.value}</strong><span>{s.label}</span></div></article>; })}</div>
-    <div className="panel-grid">
-      <section className="panel wide"><div className="panel-head"><div><h3>Inventário de máquinas</h3><p>Equipamentos cadastrados na organização</p></div><span className="tag">Dados do Supabase</span></div>
-        {machines.length ? <MachineTable machines={machines.slice(0,6)} /> : <Empty text="Nenhuma máquina cadastrada. O inventário aparecerá aqui após o primeiro cadastro."/>}
-      </section>
-      <section className="panel"><div className="panel-head"><div><h3>Ciclo de adequação</h3><p>Distribuição inicial</p></div><Gauge/></div><div className="empty-chart"><div className="donut"><span>—<small>máquinas</small></span></div><p>Os indicadores serão calculados conforme os registros de diagnóstico e ações.</p></div></section>
-      <section className="panel"><div className="panel-head"><div><h3>Central de alertas</h3><p>Ocorrências de segurança</p></div><AlertTriangle color="#D97724"/></div><Empty text="Os alertas aparecerão quando checklists e ocorrências forem habilitados."/></section>
-    </div>
-    <div className="note"><CheckCircle2 size={18}/> Fundação conectada. Os indicadores ainda não implementados são exibidos como “—”, sem inventar resultados.</div>
-    {errorMessagePlaceholder()}
-  </div>;
-}
-function errorMessagePlaceholder() { return null; }
-
-function MachineList({ machines, query, setQuery }: { machines: Machine[]; query: string; setQuery: (v:string)=>void }) {
-  return <div className="content"><div className="welcome"><div><span className="eyebrow">CADASTRO BASE</span><h1>Inventário de máquinas</h1><p>Consulta dos equipamentos vinculados à sua organização.</p></div></div>
-    <section className="panel"><div className="search-box"><Search size={18}/><input placeholder="Buscar por TAG, máquina ou setor..." value={query} onChange={e=>setQuery(e.target.value)}/></div>
-      {machines.length ? <MachineTable machines={machines}/> : <Empty text="Nenhuma máquina encontrada ou ainda não há máquinas cadastradas."/>}
-    </section></div>;
-}
-
-function MachineTable({ machines }: { machines: Machine[] }) {
-  return <div className="table-scroll"><table><thead><tr><th>TAG</th><th>Equipamento</th><th>Setor</th><th>Status</th><th>Etapa</th></tr></thead><tbody>
-    {machines.map(m=><tr key={m.id}><td><b>{m.tag}</b></td><td>{m.name}</td><td>{m.sector_name}</td><td><span className="soft-tag">{m.status}</span></td><td>{m.adequacy_stage}</td></tr>)}
-  </tbody></table></div>;
-}
-function Empty({text}:{text:string}) { return <div className="empty"><ClipboardCheck size={26}/><p>{text}</p></div>; }
-function ModulePlaceholder({title}:{title:string}) { return <div className="content"><section className="panel placeholder"><HardHat size={34}/><h2>{title}</h2><p>Este módulo está previsto na arquitetura do CONECTASEG-NR12 CONTROL e será implementado nas próximas fases.</p><span className="tag">Planejado — ainda não disponível</span></section></div>; }
+function RiskPill({value}:{value:string}){return <span className={`risk-pill ${value.toLowerCase()}`}>{value}</span>;}
+function MachineDetail({machine,onBack}:{machine:DemoMachine;onBack:()=>void}){return <div className="content"><button className="back-link" onClick={onBack}><ArrowLeft size={16}/> Voltar ao inventário</button><div className="detail-hero"><img src={machine.image} alt={machine.type}/><div><span className="eyebrow">FICHA TÉCNICA DEMONSTRATIVA • {machine.tag}</span><h1>{machine.name}</h1><p>{machine.description}</p><div className="detail-tags"><span>{machine.type}</span><span>{machine.sector}</span><RiskPill value={machine.risk}/></div></div></div>
+ <div className="detail-grid"><section className="panel"><h3>Identificação e dados técnicos</h3><InfoGrid items={[["Fabricante",machine.manufacturer],["Modelo",machine.model],["Nº de série",machine.serial],["Ano",String(machine.year)],["Potência",machine.power],["Tensão",machine.voltage],["Linha",machine.line],["Etapa",machine.stage]]}/></section>
+ <section className="panel"><h3>Apreciação de riscos — exemplo</h3><div className="hrn-score"><strong>{machine.hrn}</strong><span>HRN ilustrativo</span><RiskPill value={machine.risk}/></div><p className="muted">PLr sugerido apenas como campo de demonstração: {machine.plr}. O PLr real depende da apreciação de risco e validação da função de segurança.</p><h4>Perigos identificados</h4><ul className="detail-list">{machine.hazards.map(x=><li key={x}>{x}</li>)}</ul></section>
+ <section className="panel"><h3>Dispositivos e medidas de proteção</h3><div className="device-list">{machine.safeguards.map((x,i)=><div key={x}><ShieldCheck size={18}/><span><b>{x}</b><small>{i%2?"Proteção / comando de segurança — verificar especificação":"Dispositivo de proteção — evidência pendente de validação"}</small></span><span className="tag">Demo</span></div>)}</div></section>
+ <section className="panel"><h3>Plano de ação recomendado — exemplo</h3><ol className="detail-list ordered">{machine.actions.map(x=><li key={x}>{x}</li>)}</ol><div className="note"><AlertTriangle size={17}/> Não constitui laudo, certificação ou liberação de máquina. Exige análise e validação por profissional habilitado.</div></section></div></div>;}
+function InfoGrid({items}:{items:string[][]}){return <div className="info-grid">{items.map(([a,b])=><div key={a}><small>{a}</small><b>{b}</b></div>)}</div>;}
+function CompanyPage({demo}:{demo:boolean}){return <div className="content"><PageHead eyebrow="ESTRUTURA ORGANIZACIONAL" title="Empresas e unidades" desc="Hierarquia de organização, planta, setor, linha e máquina."/><section className="panel">{demo?<><div className="company-strip large"><Building2/><div><b>{demoCompany.name}</b><span>{demoCompany.cnpj} • {demoCompany.address}</span></div><span className="fiction-tag">DEMO</span></div><div className="org-tree"><div><b>Organização</b><span>{demoCompany.name}</span></div><i/><div><b>Unidade / planta</b><span>{demoCompany.unit}</span></div><i/><div><b>10 setores / 6 linhas produtivas</b><span>100 equipamentos cadastrados</span></div></div><p className="muted">{demoCompany.note}</p></>:<Empty text="A estrutura organizacional será exibida após o cadastro da empresa e das unidades."/>}</section></div>;}
+function RiskPage({demo}:{demo:boolean}){return <div className="content"><PageHead eyebrow="ANÁLISE DE RISCO" title="APR e matriz HRN" desc="Perigos, danos, estimativa de risco e medidas de redução."/><section className="panel">{demo?<><div className="note"><AlertTriangle size={17}/> Dados de demonstração. Os valores HRN não representam avaliação real.</div><div className="table-scroll"><table><thead><tr><th>Perigo</th><th>Fonte / situação</th><th>Classificação demo</th><th>Medida de controle</th></tr></thead><tbody>{demoRisks.map(r=><tr key={r.hazard}><td><b>{r.hazard}</b></td><td>{r.source}</td><td><RiskPill value={r.severity}/></td><td>{r.control}</td></tr>)}</tbody></table></div><h3 className="section-title">Memória de cálculo HRN</h3><p className="muted">HRN = LO × FE × DPH × NP. Escalas, parâmetros e faixas devem ser definidos e documentados na metodologia aprovada pela organização. Os números de exemplo nas fichas são apenas ilustrativos.</p></>:<Empty text="Nenhuma APR/HRN cadastrada."/>}</section></div>;}
+function DevicesPage({demo}:{demo:boolean}){return <div className="content"><PageHead eyebrow="PROTEÇÕES E COMANDOS" title="Dispositivos e funções de segurança" desc="Inventário de dispositivos, função, arquitetura e evidências de validação."/><section className="panel">{demo?<div className="device-catalog">{demoDeviceTypes.map((d,i)=><article key={d.name}><div className="device-icon"><ShieldCheck/></div><div><h3>{d.name}</h3><p>{d.purpose}</p><small>Referência técnica: {d.standard}</small></div><span className="tag">Exemplo</span></article>)}</div>:<Empty text="Nenhum dispositivo cadastrado."/>}<div className="note"><AlertTriangle size={17}/> Categoria, PLr e SIL não são equivalentes. A arquitetura e o desempenho devem ser calculados e validados conforme normas aplicáveis e evidências do sistema real.</div></section></div>;}
+function DiagnosticPage({demo}:{demo:boolean}){const rows=["Proteções fixas e móveis","Dispositivos de intertravamento","Parada de emergência","Prevenção de partida inesperada","Sistemas hidráulicos e pneumáticos","Instalações e painéis elétricos","Aterramento e equipotencialização","Sinalização e procedimentos","Manual e documentação técnica","Capacitação e autorização"];return <div className="content"><PageHead eyebrow="VERIFICAÇÃO TÉCNICA" title="Diagnóstico NR-12" desc="Checklist de requisitos, evidências e situação de atendimento."/><section className="panel">{demo?<><div className="note">Checklist ilustrativo para teste de navegação. Não é transcrição integral da NR-12.</div><div className="diagnostic-list">{rows.map((r,i)=><div key={r}><span className="diagnostic-number">{String(i+1).padStart(2,"0")}</span><b>{r}</b><span className={`diagnostic-status ${i%4===0?"pending":i%4===1?"partial":"review"}`}>{["Pendente","Parcial","Não demonstrado","Em análise"][i%4]}</span></div>)}</div></>:<Empty text="Nenhum diagnóstico registrado."/>}</section></div>;}
+function ActionPage({demo}:{demo:boolean}){return <div className="content"><PageHead eyebrow="GESTÃO DE AÇÕES" title="Plano de adequação" desc="Ações técnicas, responsáveis, prazos, custos e evidências."/><section className="panel">{demo?<div className="action-board">{["Não iniciado","Em andamento","Aguardando validação","Concluído"].map((s,i)=><div key={s}><h3>{s}</h3>{demoMachines.filter((m,j)=>j%4===i).slice(0,4).map(m=><article key={m.id}><b>{m.tag} — {m.name}</b><span>{m.actions[i%3]}</span><small>Responsável fictício: Engenharia de Segurança</small></article>)}</div>)}</div>:<Empty text="Nenhuma ação cadastrada."/>}</section></div>;}
+function WorkersPage({demo}:{demo:boolean}){const people=["Ana Paula Ribeiro","Carlos Eduardo Santos","Marcos Vinícius Lima","Fernanda Costa","João Pedro Almeida","Rafael Souza"];return <div className="content"><PageHead eyebrow="PESSOAS E COMPETÊNCIAS" title="Trabalhadores e treinamentos" desc="Matriz de capacitação e autorização por função e equipamento."/><section className="panel">{demo?<div className="table-scroll"><table><thead><tr><th>Colaborador fictício</th><th>Função</th><th>NR-12</th><th>Integração</th><th>Situação</th></tr></thead><tbody>{people.map((p,i)=><tr key={p}><td><b>{p}</b></td><td>{["Operador SMT","Operador de injetora","Mecânico","Eletricista","Ferramenteiro","Líder de produção"][i]}</td><td>{i%3===0?"Válido":"A revisar"}</td><td>Concluída</td><td><span className="soft-tag">Registro fictício</span></td></tr>)}</tbody></table></div>:<Empty text="Nenhum trabalhador cadastrado."/>}</section></div>;}
+function ReportsPage({demo}:{demo:boolean}){return <div className="content"><PageHead eyebrow="DOCUMENTAÇÃO" title="Laudos e relatórios" desc="Relatórios técnicos, evidências, revisões e aprovações."/><section className="panel">{demo?<div className="report-list">{["Relatório gerencial do inventário — DEMO.pdf","Matriz preliminar de riscos — DEMO.xlsx","Plano de adequação por setor — DEMO.pdf","Registro fotográfico ilustrativo — DEMO.pdf","Resumo de dispositivos de segurança — DEMO.pdf"].map((x,i)=><div key={x}><FileText/><span><b>{x}</b><small>Documento fictício • Modelo de visualização</small></span><span className="tag">Prévia</span></div>)}</div>:<Empty text="Nenhum laudo ou relatório cadastrado."/>}</section></div>;}
+function StandardsPage({demo}:{demo:boolean}){return <div className="content"><PageHead eyebrow="REFERÊNCIAS" title="Biblioteca normativa" desc="Referências técnicas para consulta e controle de edições."/><section className="panel"><div className="standards-grid">{["NR-12 — Segurança no trabalho em máquinas e equipamentos","ABNT NBR 14153 — Segurança de máquinas: partes de sistemas de comando relacionadas à segurança","ABNT NBR ISO 13849-1 — Partes de sistemas de comando relacionadas à segurança","ABNT NBR ISO 13849-2 — Validação","ABNT NBR ISO 12100 — Apreciação e redução de riscos","ABNT NBR ISO 14119 — Dispositivos de intertravamento","ABNT NBR ISO 13850 — Parada de emergência","ABNT NBR IEC 60204-1 — Equipamento elétrico de máquinas"].map(x=><div key={x}><FileText/><b>{x}</b><span>Verificar edição vigente e acesso licenciado</span></div>)}</div><div className="note">A lista é um ponto de partida. Confirmar edição vigente, aplicabilidade e texto oficial antes de emitir parecer técnico.</div></section></div>;}
+function ModulePlaceholder({title,demo}:{title:string;demo:boolean}){return <div className="content"><section className="panel placeholder"><HardHat size={34}/><h2>{title}</h2><p>{demo?"Este módulo está previsto no escopo do produto e será detalhado nas próximas fases.":"Este módulo está planejado e ainda não está disponível."}</p><span className="tag">{demo?"Demonstração de navegação":"Planejado"}</span></section></div>;}
