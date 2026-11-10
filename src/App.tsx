@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   Activity, AlertTriangle, Building2, CheckCircle2, ClipboardCheck, FileText,
   Gauge, HardHat, LayoutDashboard, LogOut, Menu, Search, Settings, ShieldCheck,
@@ -82,7 +82,7 @@ export default function App() {
 
 function Brand({compact=false}:{compact?:boolean}){return <div className="brand"><div className="brand-mark"><ShieldCheck size={compact?22:28}/></div><div><strong>CONECTASEG</strong><b>NR12 CONTROL</b>{!compact&&<small>Gestão integrada de máquinas</small>}</div></div>;}
 function SetupScreen(){return <main className="login-wrap"><section className="login-card"><Brand/><h1>Configuração pendente</h1><p>Adicione as variáveis <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_ANON_KEY</code> no ambiente local e nas configurações do Netlify.</p><p className="muted">Não coloque a chave service_role no navegador.</p></section></main>;}
-function PageHead({eyebrow,title,desc,action}:{eyebrow:string;title:string;desc:string;action?:React.ReactNode}){return <div className="page-head"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{desc}</p></div>{action}</div>;}
+function PageHead({eyebrow,title,desc,action}:{eyebrow:string;title:string;desc:string;action?:ReactNode}){return <div className="page-head"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{desc}</p></div>{action}</div>;}
 function Dashboard({demo,machines,onOpenInventory}:{demo:boolean;machines:any[];onOpenInventory:()=>void}){
  const count=machines.length,high=demo?machines.filter((m:DemoMachine)=>m.risk==="Crítico").length:0,work=demo?machines.filter((m:DemoMachine)=>m.status==="Em adequação").length:0;
  const cards=[["Equipamentos cadastrados",count,Wrench,"blue"],["Em adequação",demo?work:"—",Activity,"orange"],["Riscos críticos identificados",demo?high:"—",AlertTriangle,"red"],["Setores mapeados",demo?10:"—",Building2,"green"]];
