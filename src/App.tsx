@@ -80,6 +80,7 @@ export default function App() {
     </main></div>;
 }
 
+function Empty({text}:{text:string}){return <div className="empty"><Search size={26}/><p>{text}</p></div>;}
 function Brand({compact=false}:{compact?:boolean}){return <div className="brand"><div className="brand-mark"><ShieldCheck size={compact?22:28}/></div><div><strong>CONECTASEG</strong><b>NR12 CONTROL</b>{!compact&&<small>Gestão integrada de máquinas</small>}</div></div>;}
 function SetupScreen(){return <main className="login-wrap"><section className="login-card"><Brand/><h1>Configuração pendente</h1><p>Adicione as variáveis <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_ANON_KEY</code> no ambiente local e nas configurações do Netlify.</p><p className="muted">Não coloque a chave service_role no navegador.</p></section></main>;}
 function PageHead({eyebrow,title,desc,action}:{eyebrow:string;title:string;desc:string;action?:ReactNode}){return <div className="page-head"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{desc}</p></div>{action}</div>;}
